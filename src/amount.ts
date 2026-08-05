@@ -17,12 +17,29 @@ export function fromBaseUnits(
   return `${neg ? "-" : ""}${intPart}${fracPart ? "." + fracPart : ""}`;
 }
 
+/** Validate an amount string: optional sign, digits, optional single fraction. */
+function isValidAmountString(value: string): boolean {
+  return /^-?\d+(\.\d+)?$/.test(value);
+}
+
 /** Convert a human decimal string to base units as a BigInt. */
 export function toBaseUnits(value: string, decimals: number): bigint {
-  if (!value.trim()) throw new Error(`Invalid amount: ${value}`);
-  const [int = "", frac = ""] = value.trim().split(".");
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`Invalid amount: ${value}`);
+
+  // Reject malformed inputs up front: multiple dots, empty parts, junk.
+  if (!isValidAmountString(trimmed)) {
+    throw new Error(`Invalid amount: ${value}`);
+  }
+
+  const [int = "", frac = ""] = trimmed.split(".");
+  // If the fraction is longer than `decimals`, rounding it silently could
+  // change the value; reject over-precision instead of truncating.
+  if (frac.length > decimals) {
+    throw new Error(`Invalid amount: ${value} exceeds ${decimals} decimals`);
+  }
   const sign = int.startsWith("-") ? -1n : 1n;
-  const digits = int.replace(/^-/, "") + frac.padEnd(decimals, "0").slice(0, decimals);
+  const digits = int.replace(/^-/, "") + frac.padEnd(decimals, "0");
   if (!/^\d+$/.test(digits)) throw new Error(`Invalid amount: ${value}`);
   return BigInt(digits.replace(/^0+/, "") || "0") * sign;
 }

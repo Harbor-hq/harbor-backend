@@ -69,9 +69,9 @@ List indexed payouts, newest first.
 
 ## `GET /payouts/:txHash`
 
-Fetch the first payout event for a transaction hash.
+Fetch all payout events for a transaction hash, ordered by log index.
 
-- `200` — the payout (same shape as an item above)
+- `200` — `{ "txHash": "...", "payouts": [ ...items as above ] }`
 - `404` — `{ "error": "not_found", "message": "Payout not found" }`
 
 ---

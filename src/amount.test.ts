@@ -25,4 +25,13 @@ test("round-trip is stable", () => {
 test("toBaseUnits rejects malformed input", () => {
   assert.throws(() => toBaseUnits("", 6));
   assert.throws(() => toBaseUnits("abc", 6));
+  assert.throws(() => toBaseUnits("1.2.3", 6));
+  assert.throws(() => toBaseUnits(".5", 6));
+  assert.throws(() => toBaseUnits("5.", 6));
+  assert.throws(() => toBaseUnits("12a", 6));
+  assert.throws(() => toBaseUnits("1 2", 6));
+});
+
+test("toBaseUnits rejects over-precision beyond decimals", () => {
+  assert.throws(() => toBaseUnits("250.5050505", 6));
 });
