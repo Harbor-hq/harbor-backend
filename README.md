@@ -1,17 +1,37 @@
 # Harbor Backend
 
-Soroban event listener, payout indexer (SQLite), and REST API for Harbor — the off-chain service that watches the `hedegpay_batch` contract for `payout` events and serves them to [harbor-frontend](https://github.com/Harbor-hq/harbor-frontend).
+The off-chain service for the **Harbor batch-payroll protocol**: a Soroban event listener, a payout indexer backed by SQLite, and a REST API that serves indexed payouts to [harbor-frontend](https://github.com/Harbor-hq/harbor-frontend).
 
-## CI Coverage
+This service:
 
-Local gates enforced before every push: `npm run typecheck`, `npm test`, `npm run build`.
+1. **Listens** for `payout` events emitted by the `hedgepay_batch` contract on Soroban (resuming from checkpoints so nothing is lost across restarts).
+2. **Indexes** them into a local SQLite database (idempotent on `(tx_hash, log_index)`).
+3. **Serves** them over a small REST API consumed by harbor-frontend.
+
+Built with Node + TypeScript, `@stellar/stellar-sdk`, Express, and Node's built-in `node:sqlite` (no ORM/database dependency).
+
+## Table of Contents
+
+- [Tech stack](#tech-stack)
+- [Quickstart](#quickstart)
+- [What's included](#whats-included)
+- [Architecture & Flow](#architecture--flow)
+- [Local setup](#local-setup)
+- [Development](#development)
+- [Test coverage](#test-coverage)
+- [Project layout](#project-layout)
+- [Operator Guide](#operator-guide)
+- [Security Notes](#security-notes)
+- [Part of Harbor](#part-of-harbor)
 
 ## Tech stack
 
-- Node.js (>= 22.5) + TypeScript
-- `@stellar/stellar-sdk` 12
-- Express 4
-- Node's built-in `node:sqlite` (no ORM/database dependency)
+- **Runtime:** Node.js >= 22.5 (required for `node:sqlite`)
+- **Language:** TypeScript (ESM, `tsx` for dev)
+- **Stellar SDK:** `@stellar/stellar-sdk` 12
+- **HTTP:** Express 4
+- **Storage:** SQLite via the built-in `node:sqlite` module — no ORM, no database dependency
+- **Tests:** `node:test`
 
 ## Quickstart
 
@@ -21,99 +41,141 @@ cp .env.example .env   # then fill in CONTRACT_ID
 npm run dev            # tsx watch, listens on :8787
 ```
 
-By default the service runs on the public Soroban testnet with a **mock** contract id so it boots without setup — set `CONTRACT_ID` to your deployed `hedegpay_batch` contract to index real events.
+By default the service runs on the public Soroban testnet with a **mock** contract id so it boots without setup — set `CONTRACT_ID` to your deployed `hedgepay_batch` contract to index real events.
 
 ### Scripts
 
-| Script                 | What it does                     |
-| ---------------------- | -------------------------------- |
-| `npm run dev`          | Run with hot reload (`tsx watch`) |
-| `npm run build`        | Compile TS to `dist/`            |
-| `npm start`            | Run compiled `dist/`             |
-| `npm run typecheck`    | `tsc --noEmit`                   |
-| `npm test`             | Run the unit tests (`node:test`) |
+| Script              | What it does                          |
+| ------------------- | ------------------------------------- |
+| `npm run dev`       | Run with hot reload (`tsx watch`)     |
+| `npm run build`     | Compile TypeScript to `dist/`         |
+| `npm start`         | Run the compiled `dist/`              |
+| `npm run typecheck` | `tsc --noEmit`                        |
+| `npm test`          | Run the unit tests (`node:test`)      |
 
 ## What's included
 
-1. **Event listener** — polls the Soroban network for `payout` events on the configured contract, resuming from checkpoints so nothing is lost across restarts (`src/listener.ts`).
-2. **SQLite indexer** — indexes events into a local SQLite database, idempotent on `(tx_hash, log_index)` (`src/db.ts`).
-3. **REST API** — serves indexed payouts to harbor-frontend (`src/api.ts`).
+The service is split into focused modules under `src/`:
 
-### API
+| Module | Responsibility |
+| --- | --- |
+| `config.ts` | Reads and validates environment configuration (env -> default). |
+| `stellar.ts` | All Soroban RPC access: server construction + paginated event fetching. |
+| `listener.ts` | Checkpointed event-polling loop; decodes `payout` events into records. |
+| `db.ts` | SQLite schema + queries via the `Store` class (payouts, checkpoints). |
+| `amount.ts` | i128 <-> decimal amount helpers. |
+| `api.ts` | Express HTTP API. |
+| `server.ts` | Entry point — boots the listener and the API together, handles graceful shutdown. |
 
-See [docs/API.md](docs/API.md) for the full reference.
+### Event listener (`src/listener.ts`)
 
-| Endpoint               | Description                              |
-| ---------------------- | ---------------------------------------- |
-| `GET /health`          | Listener + indexer status                |
-| `GET /payouts`         | List indexed payouts (paginated, filterable) |
-| `GET /payouts/:txHash` | Single payout by transaction hash        |
+- Polls the Soroban network every `POLL_INTERVAL_MS` (default 5000 ms).
+- On each poll: fetches the latest ledger, reads the stored checkpoint, fetches all contract events from `checkpoint + 1` to the latest ledger (draining pagination via paging tokens), parses `payout` events, inserts them idempotently, then advances the checkpoint.
+- On first run it starts `START_LEDGER_BACK` (default 10) ledgers back to backfill.
+- Errors are captured into listener state (`lastError`) without killing the process; the next poll retries.
+- A decoded `payout` event looks like:
+  - topic: `[Symbol("payout"), u64 batch_id, Address payee]`
+  - data: `[i128 amount, Symbol department]`
+
+### SQLite indexer (`src/db.ts`)
+
+- **`payouts` table** keyed on `(tx_hash, log_index)` — `INSERT OR IGNORE`, so replays never duplicate rows. Amounts are stored as `TEXT` in base units to avoid BigInt precision loss.
+- **`checkpoints` table** keyed on `contract_id` — the listener resumes from here.
+- Indexes on `batch_id`, `payee`, and `ledger` keep filtered queries fast.
+
+### REST API (`src/api.ts`)
+
+| Endpoint | Description | Query params |
+| --- | --- | --- |
+| `GET /health` | Listener + indexer status (running, lastPoll, lastError, processed, lastLedger, payoutCount) | — |
+| `GET /payouts` | List indexed payouts, newest first, paginated + filterable | `limit` (1–200, default 50), `cursor`, `batchId`, `payee` |
+| `GET /payouts/:txHash` | Single payout by transaction hash (first event for that hash) | — |
 
 The `/payouts` shape matches what `harbor-frontend`'s `fetchPayoutEvents` consumes, so a frontend can point `NEXT_PUBLIC_HARBOR_EVENTS_URL` at this service.
+
+Example `/payouts` response:
+
+```json
+{
+  "payouts": [
+    {
+      "txHash": "deadbeef...",
+      "index": 0,
+      "batchId": "7",
+      "payee": "GA5G2...",
+      "amount": "250.5",
+      "token": "USDC",
+      "date": "2026-05-10T12:00:00.000Z",
+      "ledger": 123456
+    }
+  ],
+  "nextCursor": 42
+}
+```
 
 ### Configuration
 
 All via env vars (see `.env.example`):
 
-| Variable           | Default                          | Purpose                        |
-| ------------------ | -------------------------------- | ------------------------------ |
-| `RPC_URL`          | soroban-testnet                  | Soroban RPC endpoint           |
-| `CONTRACT_ID`      | mock placeholder                 | `hedegpay_batch` contract address |
-| `TOKEN_SYMBOL`     | `USDC`                           | Token label surfaced in the API |
-| `TOKEN_DECIMALS`   | `6`                              | Decimal places used to format amounts |
-| `HOST` / `PORT`    | `0.0.0.0` / `8787`               | HTTP server bind               |
-| `POLL_INTERVAL_MS` | `5000`                           | Event listener poll interval   |
-| `START_LEDGER_BACK`| `10`                             | Ledgers back to index on first run |
-| `DB_PATH`          | `./data/harbor.db`               | SQLite database file           |
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RPC_URL` | soroban-testnet | Soroban RPC endpoint |
+| `CONTRACT_ID` | mock placeholder | `hedgepay_batch` contract address |
+| `TOKEN_SYMBOL` | `USDC` | Token label surfaced in the API |
+| `TOKEN_DECIMALS` | `6` | Decimal places used to format amounts |
+| `HOST` / `PORT` | `0.0.0.0` / `8787` | HTTP server bind |
+| `POLL_INTERVAL_MS` | `5000` | Event listener poll interval |
+| `START_LEDGER_BACK` | `10` | Ledgers back to index on first run |
+| `DB_PATH` | `./data/harbor.db` | SQLite database file |
 
 ## Architecture & Flow
 
-The following diagram illustrates how the listener, the SQLite indexer, and the REST API fit together with the Soroban contract and the frontend.
+The following **Mermaid** diagram renders natively on GitHub:
 
 ```mermaid
-graph TD
-    A[hedgepay_batch contract] -->|payout_logged events| B[src/stellar.ts - getEvents]
-    B -->|paginated pages| C[src/listener.ts - poll loop]
-    C -->|resume from checkpoint| D[(SQLite: payouts + checkpoints)]
-    D -->|idempotent on tx_hash+log_index| C
-    D -->|query| E[src/db.ts Store]
-    E -->|listPayouts / getPayout| F[src/api.ts - Express]
-    F -->|GET /payouts| G[harbor-frontend Ledger]
-    F -->|GET /health| H[Operator / monitoring]
+flowchart LR
+    C[hedgepay_batch contract] -->|payout_logged events| S[src/stellar.ts<br/>fetchContractEvents]
+    S -->|paginated pages| L[src/listener.ts<br/>poll loop + parse]
+    L -->|insert, idempotent on tx_hash+log_index| DB[(SQLite<br/>payouts + checkpoints)]
+    DB -->|resume from checkpoint| L
+    DB -->|Store queries| A[src/api.ts<br/>Express routes]
+    A -->|GET /payouts| F[harbor-frontend<br/>Ledger]
+    A -->|GET /health| M[Operator / monitoring]
 ```
 
-```text
- +------------------------+   payout_logged   +---------------------------+
- |  hedegpay_batch (on-chain)  |----------------->|  src/stellar.ts         |
- +------------------------+                    |  fetchContractEvents     |
-                                                +-------------+-----------+
-                                                              | paginated pages
-                                                              v
-                                                +---------------------------+
-                                                |  src/listener.ts          |
-                                                |  - checkpointed poll loop |
-                                                |  - parsePayoutEvent       |
-                                                +-------------+-----------+
-                                                              |
-                                             insertPayout (idempotent)
-                                                              v
-                                                +---------------------------+
-                                                |   SQLite (payouts,        |
-                                                |   checkpoints)            |
-                                                +-------------+-----------+
-                                                              | Store queries
-                                                              v
-                                                +---------------------------+
-                                                |  src/api.ts (Express)     |
-                                                |  GET /health              |
-                                                |  GET /payouts             |
-                                                |  GET /payouts/:txHash     |
-                                                +-------------+-----------+
-                                                              |
-                                                              v
-                                                +---------------------------+
-                                                |  harbor-frontend Ledger   |
-                                                +---------------------------+
+And the equivalent ASCII flow:
+
+```
+ +---------------------+   payout_logged    +------------------------+
+ | hedegpay_batch      |-------------------->| src/stellar.ts        |
+ | (Soroban contract)  |                     | fetchContractEvents   |
+ +---------------------+                     +-----------+-----------+
+                                                          |  paginated pages
+                                                          v
+                                                +------------------------+
+                                                | src/listener.ts       |
+                                                | checkpointed poll loop|
+                                                | parsePayoutEvent      |
+                                                +-----------+-----------+
+                                                          |  insert (idempotent)
+                                                          v
+                                                +------------------------+
+                                                | SQLite                |
+                                                | payouts + checkpoints |
+                                                +-----------+-----------+
+                                                          |  Store queries
+                                                          v
+                                                +------------------------+
+                                                | src/api.ts (Express)  |
+                                                | GET /health           |
+                                                | GET /payouts          |
+                                                | GET /payouts/:txHash  |
+                                                +-----------+-----------+
+                                                          |
+                                                          v
+                                                +------------------------+
+                                                | harbor-frontend Ledger |
+                                                +------------------------+
 ```
 
 ## Local setup
@@ -126,6 +188,8 @@ cp .env.example .env   # then fill in CONTRACT_ID
 npm run dev
 ```
 
+Open [http://localhost:8787/health](http://localhost:8787/health) to see listener + indexer status.
+
 ## Development
 
 Use one branch per issue or feature. Follow these conventions:
@@ -137,50 +201,56 @@ Use one branch per issue or feature. Follow these conventions:
 - SQLite columns that hold i128 amounts are `TEXT` (avoid BigInt precision loss).
 - No new runtime dependencies without discussing in the PR — the service is intentionally dependency-light (`node:sqlite`, no ORM).
 
-Verify with `npm run typecheck`, `npm test`, and `npm run build`.
+Verify before pushing:
+
+```bash
+npm run typecheck
+npm test
+npm run build
+```
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the next contribution opportunities.
 
 ## Test coverage
 
-The project ships `node:test` suites for the amount helpers and the listener:
+`node:test` suites ship for the amount helpers and the listener:
 
 ```bash
 # Run locally
 npm test
 ```
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the next contribution opportunities, including indexing `executed` batch events, real SEP-24/31 anchor integration, API-key auth, Zod validation, Dockerization, Prometheus metrics, multi-contract support, and ERP sync.
-
 ## Project layout
 
 ```
 harbor-backend/
-├── .env.example                   # Env template
+├── .env.example                # Env template
 ├── src/
-│   ├── config.ts                  # Env configuration
-│   ├── db.ts                      # SQLite schema + queries (payouts, checkpoints)
-│   ├── stellar.ts                 # Soroban RPC helpers + paginated event fetch
-│   ├── listener.ts                # Checkpointed event-polling loop
-│   ├── amount.ts                  # i128 <-> decimal amount helpers
-│   ├── api.ts                     # Express HTTP API
-│   ├── server.ts                  # Entry point (listener + API)
-│   ├── amount.test.ts             # Unit tests: amount helpers
-│   └── listener.test.ts           # Unit tests: listener
+│   ├── config.ts               # Env configuration
+│   ├── db.ts                   # SQLite schema + queries (payouts, checkpoints)
+│   ├── stellar.ts              # Soroban RPC helpers + paginated event fetch
+│   ├── listener.ts             # Checkpointed event-polling loop
+│   ├── amount.ts               # i128 <-> decimal amount helpers
+│   ├── api.ts                  # Express HTTP API
+│   ├── server.ts               # Entry point (listener + API)
+│   ├── amount.test.ts          # Unit tests: amount helpers
+│   └── listener.test.ts        # Unit tests: listener
 ├── docs/
-│   ├── API.md                     # REST endpoint reference
-│   └── ROADMAP.md                 # Contribution opportunities
-└── CONTRIBUTING.md                # Developer setup + PR workflow
+│   ├── API.md                  # REST endpoint reference
+│   └── ROADMAP.md              # Contribution opportunities
+└── CONTRIBUTING.md             # Developer setup + PR workflow
 ```
 
 ## Operator Guide
 
-Backend operators setting up a new deployment:
+Set up a new deployment:
 
-1. Deploy `hedgepay_batch` (see [Harbor-hq/harbor](https://github.com/Harbor-hq/harbor)).
-2. Set `CONTRACT_ID` to the deployed contract's C-address.
-3. Set `DB_PATH` to a persistent volume; the listener resumes from `checkpoints` so no events are lost across restarts.
-4. Set `RPC_URL`, `TOKEN_SYMBOL`, and `TOKEN_DECIMALS` to match your network and settlement token.
-5. Point harbor-frontend's `NEXT_PUBLIC_HARBOR_EVENTS_URL` at `http://<host>:8787/payouts`.
-6. Verify with `GET /health` (listener running, payout count, last ledger).
+1. **Deploy the contract.** Deploy `hedgepay_batch` (see [Harbor-hq/harbor](https://github.com/Harbor-hq/harbor)) and capture its C-address.
+2. **Configure.** Set `CONTRACT_ID` to that address; set `RPC_URL`, `TOKEN_SYMBOL`, `TOKEN_DECIMALS` to match your network and settlement token.
+3. **Persist the DB.** Set `DB_PATH` to a persistent volume; the listener resumes from `checkpoints` so no events are lost across restarts.
+4. **Run.** `npm run build && npm start`, or point a process manager (systemd / pm2 / Docker) at `dist/server.js`.
+5. **Wire the frontend.** Set harbor-frontend's `NEXT_PUBLIC_HARBOR_EVENTS_URL` to `http://<host>:8787/payouts`.
+6. **Verify.** `GET /health` should report `listener.running = true`, the payout count, and the last indexed ledger.
 
 ## Security Notes
 
@@ -191,5 +261,7 @@ Backend operators setting up a new deployment:
 - **Input bounds:** `limit` is clamped to `1..200` on `/payouts`.
 
 ## Part of Harbor
+
+---
 
 Contracts: [Harbor-hq/harbor](https://github.com/Harbor-hq/harbor) · Frontend: [Harbor-hq/harbor-frontend](https://github.com/Harbor-hq/harbor-frontend)
