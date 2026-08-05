@@ -59,7 +59,7 @@ cd harbor-backend
 npm install
 ```
 
-Requires Node.js **>= 22.5** (for `node:sqlite`).
+Requires Node.js **>= 22.5** (tested on Node 22 and 24 LTS, configuration managed via `.nvmrc` for version locking).
 
 ---
 
@@ -98,6 +98,15 @@ All configuration flows through `getConfig()` (env -> default). See `.env.exampl
 | `POLL_INTERVAL_MS` | `5000`                           | Event listener poll interval   |
 | `START_LEDGER_BACK`| `10`                             | Ledgers back to index on first run |
 | `DB_PATH`          | `./data/harbor.db`               | SQLite database file           |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000`      | Comma-separated list of allowed origins (or `*`) |
+
+### CORS Security & Tradeoffs
+
+Harbor restricts access to the REST API by validating cross-origin requests. 
+
+- **Security Profile:** By default, it allows requests originating from `http://localhost:3000` (typical frontend development server).
+- **Production Deployment:** Set `CORS_ALLOWED_ORIGINS` to your production frontend domains (e.g. `https://harbor.finance,https://admin.harbor.finance`).
+- **Tradeoff (Wildcard vs Strict):** Setting `CORS_ALLOWED_ORIGINS` to `*` allows any external site to read payout events and index status from your API, which may pose a privacy or scraping risk depending on the sensitivity of your transaction volume. Restricting it strictly prevents unauthorized domain access.
 
 ---
 

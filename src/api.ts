@@ -14,7 +14,12 @@ export function createApp(
 
   // CORS so the browser frontend can call the API directly.
   app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin;
+    if (config.corsAllowedOrigins.includes("*")) {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+    } else if (origin && config.corsAllowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
     if (req.method === "OPTIONS") {

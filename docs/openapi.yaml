@@ -1,0 +1,181 @@
+openapi: 3.0.3
+info:
+  title: Harbor Backend API
+  description: Off-chain event listener, payout indexer, and REST API for Harbor batch payroll.
+  version: 0.1.0
+servers:
+  - url: http://localhost:8787
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Get listener and indexer health status
+      description: Returns health details of the Soroban event listener and the local SQLite indexer, including processed events count and sync backlog.
+      responses:
+        '200':
+          description: Health status details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  contractId:
+                    type: string
+                    example: CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID
+                  rpcUrl:
+                    type: string
+                    example: https://soroban-testnet.stellar.org
+                  listener:
+                    type: object
+                    properties:
+                      running:
+                        type: boolean
+                        example: true
+                      lastPoll:
+                        type: integer
+                        nullable: true
+                        example: 1785850523766
+                      lastError:
+                        type: string
+                        nullable: true
+                        example: null
+                      processed:
+                        type: integer
+                        example: 12
+                  index:
+                    type: object
+                    properties:
+                      lastLedger:
+                        type: integer
+                        example: 123456
+                      payoutCount:
+                        type: integer
+                        example: 42
+                      backlog:
+                        type: integer
+                        example: 0
+
+  /payouts:
+    get:
+      summary: List indexed payouts
+      description: Retrieves a list of payout records from the database, sorted newest first, with cursor-based pagination and filters.
+      parameters:
+        - name: limit
+          in: query
+          description: Max number of payouts to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: Pagination cursor from previous nextCursor response
+          required: false
+          schema:
+            type: integer
+        - name: batchId
+          in: query
+          description: Filter payouts by exact batch ID
+          required: false
+          schema:
+            type: string
+        - name: payee
+          in: query
+          description: Filter payouts by exact payee address
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of payouts and the pagination cursor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  payouts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payout'
+                  nextCursor:
+                    type: integer
+                    nullable: true
+                    example: 42
+
+  /payouts/{txHash}:
+    get:
+      summary: Fetch payout events by transaction hash
+      description: Retrieves all payout events corresponding to the provided transaction hash, ordered by log index.
+      parameters:
+        - name: txHash
+          in: path
+          description: Transaction hash to look up
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payouts matching the transaction hash
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  txHash:
+                    type: string
+                    example: deadbeef...
+                  payouts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payout'
+        '404':
+          description: Payout not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Payout:
+      type: object
+      properties:
+        txHash:
+          type: string
+          example: deadbeef...
+        index:
+          type: integer
+          example: 0
+        batchId:
+          type: string
+          example: "7"
+        payee:
+          type: string
+          example: GA5G2...
+        amount:
+          type: string
+          example: "250.5"
+        token:
+          type: string
+          example: USDC
+        date:
+          type: string
+          format: date-time
+          example: "2026-05-10T12:00:00.000Z"
+        ledger:
+          type: integer
+          example: 123456
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: not_found
+        message:
+          type: string
+          example: Payout not found

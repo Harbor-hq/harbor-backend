@@ -8,6 +8,7 @@ export interface Config {
   pollIntervalMs: number;
   startLedgerBack: number;
   dbPath: string;
+  corsAllowedOrigins: string[];
 }
 
 function num(name: string, fallback: number): number {
@@ -29,5 +30,8 @@ export function getConfig(env: NodeJS.ProcessEnv = process.env): Config {
     pollIntervalMs: num("POLL_INTERVAL_MS", 5000),
     startLedgerBack: num("START_LEDGER_BACK", 10),
     dbPath: env.DB_PATH ?? "./data/harbor.db",
+    corsAllowedOrigins: env.CORS_ALLOWED_ORIGINS
+      ? env.CORS_ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)
+      : ["http://localhost:3000"],
   };
 }

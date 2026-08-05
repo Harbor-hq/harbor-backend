@@ -4,6 +4,9 @@ Base URL: `http://localhost:8787` (configurable via `HOST`/`PORT`).
 
 All endpoints return JSON. CORS is enabled for browser clients.
 
+> [!NOTE]
+> An OpenAPI 3.0 specification for this API is maintained in [openapi.yaml](openapi.yaml). Please keep this file and `openapi.yaml` in sync when modifying API routes.
+
 ---
 
 ## `GET /health`
@@ -23,7 +26,8 @@ Listener and indexer status.
   },
   "index": {
     "lastLedger": 123456,
-    "payoutCount": 42
+    "payoutCount": 42,
+    "backlog": 0
   }
 }
 ```

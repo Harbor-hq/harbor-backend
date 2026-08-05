@@ -12,7 +12,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test --experimental-test-coverage src/**/*.test.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^12.3.0",
