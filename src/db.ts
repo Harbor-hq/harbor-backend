@@ -18,6 +18,7 @@ export interface PayoutPage {
 export interface ListenerHealth {
   lastLedger: number;
   payoutCount: number;
+  /** Difference between the latest known on-chain ledger and the newest indexed payout. */
   backlog: number;
 }
 
@@ -36,6 +37,9 @@ export class Store {
 
   private migrate(): void {
     this.db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA busy_timeout = 5000;
+      PRAGMA synchronous = NORMAL;
       CREATE TABLE IF NOT EXISTS payouts (
         tx_hash       TEXT    NOT NULL,
         log_index     INTEGER NOT NULL,
@@ -139,8 +143,9 @@ export class Store {
     return { payouts, nextCursor };
   }
 
-  getPayout(txHash: string): PayoutRecord | null {
-    const row = this.db
+  /** All payout events for a transaction hash, ordered by log index. */
+  getPayouts(txHash: string): PayoutRecord[] {
+    return this.db
       .prepare(
         `SELECT tx_hash AS txHash, log_index AS logIndex, batch_id AS batchId,
                 payee, amount_base AS amountBase, amount_display AS amountDisplay,
@@ -148,20 +153,24 @@ export class Store {
          FROM payouts WHERE tx_hash = ? ORDER BY log_index ASC`
       )
       .all(txHash) as unknown as PayoutRecord[];
-    return row[0] ?? null;
   }
 
-  health(): ListenerHealth {
+  health(latestOnChainLedger?: number): ListenerHealth {
     const lastLedger = this.db
       .prepare("SELECT MAX(ledger) AS l FROM payouts")
       .get() as { l: number | null };
     const payoutCount = this.db
       .prepare("SELECT COUNT(*) AS c FROM payouts")
       .get() as { c: number };
+    const last = lastLedger.l ?? 0;
+    const backlog =
+      latestOnChainLedger !== undefined && latestOnChainLedger >= last
+        ? latestOnChainLedger - last
+        : 0;
     return {
-      lastLedger: lastLedger.l ?? 0,
+      lastLedger: last,
       payoutCount: payoutCount.c,
-      backlog: 0,
+      backlog,
     };
   }
 

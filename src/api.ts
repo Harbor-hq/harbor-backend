@@ -25,8 +25,10 @@ export function createApp(
   });
 
   app.get("/health", (_req, res) => {
-    const health = store.health();
+    // The checkpoint holds the last on-chain ledger the listener indexed up
+    // to; use it to report a real backlog instead of a hardcoded 0.
     const latest = store.getCheckpoint(config.contractId);
+    const health = store.health(latest ?? undefined);
     res.json({
       status: "ok",
       contractId: config.contractId,
@@ -38,8 +40,9 @@ export function createApp(
         processed: listener.processed,
       },
       index: {
-        lastLedger: latest ?? health.lastLedger,
+        lastLedger: health.lastLedger,
         payoutCount: health.payoutCount,
+        backlog: health.backlog,
       },
     });
   });
@@ -60,12 +63,15 @@ export function createApp(
   });
 
   app.get("/payouts/:txHash", (req, res) => {
-    const payout = store.getPayout(req.params.txHash);
-    if (!payout) {
+    const payouts = store.getPayouts(req.params.txHash);
+    if (payouts.length === 0) {
       res.status(404).json({ error: "not_found", message: "Payout not found" });
       return;
     }
-    res.json(toApiItem(config)(payout));
+    res.json({
+      txHash: req.params.txHash,
+      payouts: payouts.map(toApiItem(config)),
+    });
   });
 
   // 404 for unknown routes.

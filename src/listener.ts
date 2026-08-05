@@ -22,7 +22,19 @@ export function startListener(
   state: ListenerState
 ): () => void {
   const server = getServer(config);
-  let stop = false;
+  let inFlight: Promise<void> = Promise.resolve();
+  let consecutiveFailures = 0;
+  const MAX_BACKOFF_MS = 300_000;
+  let stopped = false;
+
+  function nextDelayMs(): number {
+    if (consecutiveFailures === 0) return config.pollIntervalMs;
+    const backoff = Math.min(
+      MAX_BACKOFF_MS,
+      config.pollIntervalMs * 2 ** consecutiveFailures
+    );
+    return Math.max(config.pollIntervalMs, backoff);
+  }
 
   async function poll(): Promise<void> {
     try {
@@ -55,6 +67,7 @@ export function startListener(
       store.setCheckpoint(config.contractId, currentLedger);
       state.processed += events.length;
       state.lastError = null;
+      consecutiveFailures = 0;
 
       if (events.length > 0) {
         console.log(
@@ -63,18 +76,30 @@ export function startListener(
       }
     } catch (err) {
       state.lastError = describeError(err);
-      console.error("[listener] poll failed:", state.lastError);
+      consecutiveFailures += 1;
+      console.error(
+        `[listener] poll failed (attempt ${consecutiveFailures}):`,
+        state.lastError
+      );
     }
   }
 
-  const timer = setInterval(poll, config.pollIntervalMs);
+  function scheduleNext(): void {
+    if (stopped) return;
+    const delay = nextDelayMs();
+    setTimeout(() => {
+      inFlight = poll().finally(() => scheduleNext());
+    }, delay);
+  }
+
   state.running = true;
-  poll();
+  inFlight = poll().finally(() => scheduleNext());
 
   return () => {
-    stop = true;
-    clearInterval(timer);
+    stopped = true;
     state.running = false;
+    // Wait for any in-flight poll so shutdown() can exit cleanly.
+    return inFlight;
   };
 }
 

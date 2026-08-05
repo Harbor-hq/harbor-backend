@@ -29,16 +29,23 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`[harbor] RPC ${config.rpcUrl}`);
 });
 
+// Prevent hung sockets from accumulating when a request or upstream RPC stalls.
+server.requestTimeout = 30_000;
+server.headersTimeout = 31_000;
+server.keepAliveTimeout = 5_000;
+
 let shuttingDown = false;
-function shutdown(signal: string) {
+async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\n[harbor] ${signal} received, shutting down…`);
-  stopListener();
+  await stopListener();
   server.close(() => {
     store.close();
     process.exit(0);
   });
+  // Force-exit if close hangs (e.g. open keep-alive sockets).
+  setTimeout(() => process.exit(0), 5_000).unref();
 }
 
 process.on("SIGINT", () => shutdown("SIGINT"));
