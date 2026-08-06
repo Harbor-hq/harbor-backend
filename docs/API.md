@@ -40,12 +40,13 @@ List indexed payouts, newest first.
 
 **Query params**
 
-| Param    | Type   | Default | Description                          |
-| -------- | ------ | ------- | ------------------------------------ |
-| `limit`  | number | `50`     | Page size (max `200`)                |
-| `cursor` | number | —        | Cursor from a previous `nextCursor`  |
-| `batchId`| string | —        | Filter by batch id                   |
-| `payee`  | string | —        | Filter by exact payee address        |
+| Param        | Type   | Default | Description                          |
+| ------------ | ------ | ------- | ------------------------------------ |
+| `limit`      | number | `50`     | Page size (max `200`)                |
+| `cursor`     | number | —        | Cursor from a previous `nextCursor`  |
+| `batchId`    | string | —        | Filter by batch id                   |
+| `payee`      | string | —        | Filter by exact payee address        |
+| `department` | string | —        | Filter by exact department           |
 
 **Response**
 

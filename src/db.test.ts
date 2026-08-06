@@ -27,11 +27,11 @@ test("insertPayout is idempotent on (tx_hash, log_index)", () => {
   store.close();
 });
 
-test("listPayouts filters by batchId and payee", () => {
+test("listPayouts filters by batchId, payee and department", () => {
   const store = new Store(":memory:");
-  store.insertPayout(makePayout({ txHash: "a", batchId: "1", payee: "GA" }));
-  store.insertPayout(makePayout({ txHash: "b", batchId: "1", payee: "GB" }));
-  store.insertPayout(makePayout({ txHash: "c", batchId: "2", payee: "GA" }));
+  store.insertPayout(makePayout({ txHash: "a", batchId: "1", payee: "GA", department: "eng" }));
+  store.insertPayout(makePayout({ txHash: "b", batchId: "1", payee: "GB", department: "mkt" }));
+  store.insertPayout(makePayout({ txHash: "c", batchId: "2", payee: "GA", department: "eng" }));
 
   const byBatch = store.listPayouts({ batchId: "1", limit: 10 });
   assert.equal(byBatch.payouts.length, 2);
@@ -39,7 +39,10 @@ test("listPayouts filters by batchId and payee", () => {
   const byPayee = store.listPayouts({ payee: "GA", limit: 10 });
   assert.equal(byPayee.payouts.length, 2);
 
-  const both = store.listPayouts({ batchId: "1", payee: "GA", limit: 10 });
+  const byDept = store.listPayouts({ department: "eng", limit: 10 });
+  assert.equal(byDept.payouts.length, 2);
+
+  const both = store.listPayouts({ batchId: "1", payee: "GA", department: "eng", limit: 10 });
   assert.equal(both.payouts.length, 1);
   store.close();
 });

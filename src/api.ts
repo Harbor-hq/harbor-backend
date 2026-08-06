@@ -68,8 +68,10 @@ export function createApp(
       typeof req.query.batchId === "string" ? req.query.batchId : undefined;
     const payee =
       typeof req.query.payee === "string" ? req.query.payee : undefined;
+    const department =
+      typeof req.query.department === "string" ? req.query.department : undefined;
 
-    const page = store.listPayouts({ batchId, payee, limit, cursor });
+    const page = store.listPayouts({ batchId, payee, department, limit, cursor });
     res.json({
       payouts: page.payouts.map(toApiItem(config)),
       nextCursor: page.nextCursor,

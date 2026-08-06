@@ -6,6 +6,7 @@ import type { PayoutRecord } from "./types.js";
 export interface PayoutFilters {
   batchId?: string;
   payee?: string;
+  department?: string;
   limit: number;
   cursor?: number;
 }
@@ -116,6 +117,10 @@ export class Store {
     if (filters.payee) {
       clauses.push("payee = ?");
       args.push(filters.payee);
+    }
+    if (filters.department) {
+      clauses.push("department = ?");
+      args.push(filters.department);
     }
     if (filters.cursor) {
       clauses.push("rowid < ?");
