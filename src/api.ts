@@ -53,7 +53,16 @@ export function createApp(
   });
 
   app.get("/payouts", (req, res) => {
-    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    let limit = 50;
+    if (req.query.limit !== undefined) {
+      const parsed = Number(req.query.limit);
+      if (Number.isInteger(parsed)) {
+        limit = Math.min(Math.max(parsed, 1), 200);
+        if (limit !== parsed) {
+          console.log(`[api] Clamped requested limit ${parsed} to ${limit}`);
+        }
+      }
+    }
     const cursor = req.query.cursor ? Number(req.query.cursor) : undefined;
     const batchId =
       typeof req.query.batchId === "string" ? req.query.batchId : undefined;
