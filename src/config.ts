@@ -19,10 +19,21 @@ function num(name: string, fallback: number): number {
 }
 
 export function getConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const contractId = env.CONTRACT_ID ?? "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID";
+  
+  // Validate CONTRACT_ID format
+  if (contractId !== "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID") {
+    const regex = /^C[A-Z2-7]{55}$/;
+    if (!regex.test(contractId)) {
+      throw new Error(
+        `Invalid CONTRACT_ID format: "${contractId}". Soroban contract IDs must start with 'C' and be 56 characters long.`
+      );
+    }
+  }
+
   return {
     rpcUrl: env.RPC_URL ?? "https://soroban-testnet.stellar.org",
-    contractId:
-      env.CONTRACT_ID ?? "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID",
+    contractId,
     tokenSymbol: env.TOKEN_SYMBOL ?? "USDC",
     tokenDecimals: num("TOKEN_DECIMALS", 6),
     host: env.HOST ?? "0.0.0.0",
