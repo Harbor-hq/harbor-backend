@@ -265,6 +265,25 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the next contribution opportunities (
 
 ---
 
+## Troubleshooting
+
+### SQLite Database Locking (`SQLITE_BUSY`)
+If you see database busy errors, ensure only one instance of `harbor-backend` is running against the SQLite file. The store is configured with Write-Ahead Logging (WAL) mode and a 5000ms busy timeout to prevent write locks, but parallel execution of multiple processes on the same database file should be avoided.
+
+### Soroban RPC Connection Timeouts
+If the off-chain listener fails to poll the network and logs connection errors or HTTP timeouts:
+1. Double-check your `RPC_URL` configuration in the `.env` file.
+2. If using the default public Testnet RPC (`https://soroban-testnet.stellar.org`), it may occasionally experience rate-limiting. Try utilizing a private RPC provider or local Quickstart instance.
+
+### Listener Restarts and Checkpointing
+The listener is checkpointed per contract, saving the sequence of the last processed ledger sequence in the database. If you need to force the indexer to re-index older payouts, you can manually clear the checkpoint row:
+```sql
+DELETE FROM checkpoints WHERE contract_id = 'your_contract_id';
+```
+Or delete the SQLite database file (specified by `DB_PATH`) to completely rebuild the database from the `START_LEDGER_BACK` setting.
+
+---
+
 ## Contributing
 
 Pull requests are welcome. For significant changes, please open an issue first to discuss what you'd like to change.
