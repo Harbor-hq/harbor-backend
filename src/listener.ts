@@ -3,6 +3,7 @@ import type { Store } from "./db.js";
 import { fetchContractEvents, getServer } from "./stellar.js";
 import { fromBaseUnits } from "./amount.js";
 import type { PayoutEventRaw, PayoutRecord } from "./types.js";
+import { logger } from "./logger.js";
 
 export interface ListenerState {
   running: boolean;
@@ -70,17 +71,19 @@ export function startListener(
       consecutiveFailures = 0;
 
       if (events.length > 0) {
-        console.log(
-          `[listener] indexed ${inserted}/${events.length} payouts across ledgers ${startLedger}–${currentLedger}`
-        );
+        logger.info("indexed payouts", {
+          inserted,
+          total: events.length,
+          startLedger,
+          currentLedger,
+        });
       }
     } catch (err) {
       state.lastError = describeError(err);
       consecutiveFailures += 1;
-      console.error(
-        `[listener] poll failed (attempt ${consecutiveFailures}):`,
-        state.lastError
-      );
+      logger.error("poll failed", state.lastError, {
+        attempt: consecutiveFailures,
+      });
     }
   }
 

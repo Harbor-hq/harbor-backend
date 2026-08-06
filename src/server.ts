@@ -2,14 +2,14 @@ import { getConfig } from "./config.js";
 import { Store } from "./db.js";
 import { createApp } from "./api.js";
 import { startListener, type ListenerState } from "./listener.js";
+import { logger } from "./logger.js";
 
 const config = getConfig();
 const store = new Store(config.dbPath);
 
 if (store.isMockContract(config.contractId)) {
-  console.warn(
-    "[harbor] WARNING: CONTRACT_ID is the mock placeholder. No real events will be indexed. " +
-      "Set CONTRACT_ID to your deployed hedegpay_batch contract."
+  logger.warn(
+    "CONTRACT_ID is the mock placeholder. No real events will be indexed. Set CONTRACT_ID to your deployed hedegpay_batch contract."
   );
 }
 
@@ -24,9 +24,9 @@ const stopListener = startListener(config, store, listener);
 
 const app = createApp(config, store, listener);
 const server = app.listen(config.port, config.host, () => {
-  console.log(`[harbor] API listening on http://${config.host}:${config.port}`);
-  console.log(`[harbor] listening to contract ${config.contractId}`);
-  console.log(`[harbor] RPC ${config.rpcUrl}`);
+  logger.info("API listening", { host: config.host, port: config.port });
+  logger.info("listening to contract", { contractId: config.contractId });
+  logger.info("RPC URL configured", { rpcUrl: config.rpcUrl });
 });
 
 // Prevent hung sockets from accumulating when a request or upstream RPC stalls.
@@ -38,7 +38,7 @@ let shuttingDown = false;
 async function shutdown(signal: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`\n[harbor] ${signal} received, shutting down…`);
+  logger.info("received signal, shutting down", { signal });
   await stopListener();
   server.close(() => {
     store.close();
