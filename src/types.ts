@@ -24,6 +24,7 @@ export interface PayoutApiItem {
   token: string;
   date: string;
   ledger: number;
+  department: string;
 }
 
 export interface PayoutEventRaw {

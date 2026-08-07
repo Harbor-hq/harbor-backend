@@ -116,6 +116,7 @@ function toApiItem(config: Config) {
     batchId: string;
     payee: string;
     amountDisplay: string;
+    department: string;
     ledger: number;
     createdAt: string;
   }): PayoutApiItem => ({
@@ -127,5 +128,6 @@ function toApiItem(config: Config) {
     token: config.tokenSymbol,
     date: p.createdAt,
     ledger: p.ledger,
+    department: p.department,
   });
 }

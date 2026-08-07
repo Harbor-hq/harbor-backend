@@ -61,7 +61,8 @@ List indexed payouts, newest first.
       "amount": "250.5",
       "token": "USDC",
       "date": "2026-05-10T12:00:00.000Z",
-      "ledger": 123456
+      "ledger": 123456,
+      "department": "eng"
     }
   ],
   "nextCursor": 42

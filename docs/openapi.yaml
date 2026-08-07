@@ -176,6 +176,9 @@ components:
         ledger:
           type: integer
           example: 123456
+        department:
+          type: string
+          example: eng
     Error:
       type: object
       properties:
