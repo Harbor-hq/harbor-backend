@@ -84,6 +84,26 @@ export function createApp(
       payouts: page.payouts.map(toApiItem(config)),
       nextCursor: page.nextCursor,
     });
+  app.get("/payouts/export", (req, res) => {
+    const format = req.query.format === "csv" ? "csv" : "json";
+    const page = store.listPayouts({ limit: 1000 });
+    const items = page.payouts.map(toApiItem(config));
+
+    if (format === "csv") {
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", 'attachment; filename="payouts.csv"');
+      const header = "txHash,logIndex,batchId,payee,amountDisplay,department,createdAt\n";
+      const rows = items
+        .map(
+          (i) =>
+            `${i.txHash},${i.logIndex},${i.batchId},${i.payee},${i.amountDisplay},${i.department},${i.createdAt}`
+        )
+        .join("\n");
+      res.send(header + rows);
+      return;
+    }
+
+    res.json({ count: items.length, payouts: items });
   });
 
   app.get("/payouts/:txHash", (req, res) => {
