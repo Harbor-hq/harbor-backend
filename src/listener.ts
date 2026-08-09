@@ -60,13 +60,20 @@ export function startListener(
       );
 
       let inserted = 0;
+      let highestSuccessLedger = startLedger - 1;
       for (const event of events) {
         const payout = parsePayoutEvent(event, config);
         if (!payout) continue;
         if (store.insertPayout(payout)) inserted += 1;
+        highestSuccessLedger = Math.max(highestSuccessLedger, event.ledger);
       }
 
-      store.setCheckpoint(config.contractId, currentLedger);
+      const checkpointToSave =
+        events.length > 0 && highestSuccessLedger >= startLedger
+          ? Math.min(currentLedger, highestSuccessLedger)
+          : currentLedger;
+
+      store.setCheckpoint(config.contractId, checkpointToSave);
       state.processed += events.length;
       state.lastError = null;
       consecutiveFailures = 0;
