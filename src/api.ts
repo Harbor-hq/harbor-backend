@@ -26,6 +26,13 @@ export function createApp(
       res.sendStatus(204);
       return;
     }
+    if (process.env.API_KEY && req.path !== "/health") {
+      const auth = req.headers.authorization;
+      if (auth !== `Bearer ${process.env.API_KEY}`) {
+        res.status(401).json({ error: "unauthorized", message: "Invalid or missing Bearer API key" });
+        return;
+      }
+    }
     next();
   });
 

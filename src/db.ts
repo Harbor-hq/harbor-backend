@@ -65,6 +65,15 @@ export class Store {
         contract_id TEXT PRIMARY KEY,
         last_ledger INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS erp_outbox (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type  TEXT    NOT NULL,
+        payload     TEXT    NOT NULL,
+        status      TEXT    NOT NULL DEFAULT 'pending',
+        created_at  TEXT    NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_outbox_status ON erp_outbox (status);
     `);
   }
 
