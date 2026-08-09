@@ -118,6 +118,25 @@ export function createApp(
     });
   });
 
+  app.get("/batches/:id", (req, res) => {
+    const page = store.listPayouts({ batchId: req.params.id, limit: 200 });
+    if (page.payouts.length === 0) {
+      res.status(404).json({ error: "not_found", message: `Batch ${req.params.id} not found` });
+      return;
+    }
+    const items = page.payouts.map(toApiItem(config));
+    let totalBase = 0n;
+    for (const p of page.payouts) {
+      totalBase += BigInt(p.amountBase);
+    }
+    res.json({
+      batchId: req.params.id,
+      itemCount: items.length,
+      totalAmountDisplay: fromBaseUnits(totalBase, config.tokenDecimals),
+      payouts: items,
+    });
+  });
+
   // 404 for unknown routes.
   app.use((req, res) => {
     res.status(404).json({ error: "not_found", message: `No route ${req.path}` });
