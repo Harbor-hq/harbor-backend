@@ -13,6 +13,7 @@ const config = {
   pollIntervalMs: 5000,
   startLedgerBack: 10,
   dbPath: ":memory:",
+  corsAllowedOrigins: ["http://localhost:3000"],
 };
 
 test("parses a payout event", () => {
@@ -43,4 +44,49 @@ test("ignores non-payout events", () => {
     data: [],
   };
   assert.equal(parsePayoutEvent(event, config), null);
+});
+
+test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
+  // Missing batchId
+  const noBatch: PayoutEventRaw = {
+    txHash: "a",
+    logIndex: 0,
+    ledger: 1,
+    topic: ["payout", "", "GA5G..."],
+    data: [100n, "eng"],
+  };
+  assert.equal(parsePayoutEvent(noBatch, config), null);
+
+  // Missing payee
+  const noPayee: PayoutEventRaw = {
+    txHash: "a",
+    logIndex: 0,
+    ledger: 1,
+    topic: ["payout", "1", ""],
+    data: [100n, "eng"],
+  };
+  assert.equal(parsePayoutEvent(noPayee, config), null);
+
+  // Missing amount in data
+  const noAmount: PayoutEventRaw = {
+    txHash: "a",
+    logIndex: 0,
+    ledger: 1,
+    topic: ["payout", "1", "GA5G..."],
+    data: [],
+  };
+  assert.equal(parsePayoutEvent(noAmount, config), null);
+
+  // Missing department defaults to empty string
+  const noDept: PayoutEventRaw = {
+    txHash: "a",
+    logIndex: 0,
+    ledger: 1,
+    topic: ["payout", "1", "GA5G..."],
+    data: [5000000n],
+  };
+  const record = parsePayoutEvent(noDept, config);
+  assert.ok(record);
+  assert.equal(record.department, "");
+  assert.equal(record.amountDisplay, "5");
 });
