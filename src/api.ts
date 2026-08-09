@@ -48,6 +48,7 @@ export function createApp(
         lastLedger: health.lastLedger,
         payoutCount: health.payoutCount,
         backlog: health.backlog,
+        dbSizeBytes: health.sizeBytes,
       },
     });
   });

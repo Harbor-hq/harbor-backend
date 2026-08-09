@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import { dirname } from "node:path";
 import type { PayoutRecord } from "./types.js";
 
@@ -21,14 +21,18 @@ export interface ListenerHealth {
   payoutCount: number;
   /** Difference between the latest known on-chain ledger and the newest indexed payout. */
   backlog: number;
+  /** Database file size in bytes. */
+  sizeBytes: number;
 }
 
 const MOCK_CONTRACT_ID = "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID";
 
 export class Store {
   private db: DatabaseSync;
+  private dbPath: string;
 
   constructor(dbPath: string) {
+    this.dbPath = dbPath;
     if (dbPath !== ":memory:") {
       mkdirSync(dirname(dbPath), { recursive: true });
     }
@@ -172,10 +176,17 @@ export class Store {
       latestOnChainLedger !== undefined && latestOnChainLedger >= last
         ? latestOnChainLedger - last
         : 0;
+    let sizeBytes = 0;
+    if (this.dbPath !== ":memory:") {
+      try {
+        sizeBytes = statSync(this.dbPath).size;
+      } catch {}
+    }
     return {
       lastLedger: last,
       payoutCount: payoutCount.c,
       backlog,
+      sizeBytes,
     };
   }
 

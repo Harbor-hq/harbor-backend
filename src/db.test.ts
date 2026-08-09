@@ -68,6 +68,7 @@ test("health reports backlog from the latest on-chain ledger", () => {
   assert.equal(h.payoutCount, 2);
   assert.equal(h.lastLedger, 105);
   assert.equal(h.backlog, 15);
+  assert.equal(typeof h.sizeBytes, "number");
 
   // Without a known on-chain ledger, backlog defaults to 0.
   assert.equal(store.health().backlog, 0);
