@@ -68,6 +68,10 @@ export function createApp(
       }
     }
     const cursor = req.query.cursor ? Number(req.query.cursor) : undefined;
+    if (cursor !== undefined && (!Number.isInteger(cursor) || cursor < 0)) {
+      res.status(400).json({ error: "bad_request", message: "Invalid cursor parameter: must be a positive integer" });
+      return;
+    }
     const batchId =
       typeof req.query.batchId === "string" ? req.query.batchId : undefined;
     const payee =
