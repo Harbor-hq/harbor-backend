@@ -105,6 +105,18 @@ test("listPayouts paginates with nextCursor and stops at the end", () => {
   store.close();
 });
 
+test("listPayouts returns null nextCursor when count matches limit exactly", () => {
+  const store = new Store(":memory:");
+  for (let i = 0; i < 4; i++) {
+    store.insertPayout(makePayout({ txHash: `tx${i}`, ledger: 100 + i }));
+  }
+
+  const page = store.listPayouts({ limit: 4 });
+  assert.equal(page.payouts.length, 4);
+  assert.equal(page.nextCursor, null);
+  store.close();
+});
+
 test("isMockContract identifies mock contract ID", () => {
   const store = new Store(":memory:");
   assert.equal(store.isMockContract("CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID"), true);

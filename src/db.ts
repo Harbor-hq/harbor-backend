@@ -141,13 +141,14 @@ export class Store {
          ORDER BY rowid DESC
          LIMIT ?`
       )
-      .all(...args, filters.limit) as unknown as Array<
+      .all(...args, filters.limit + 1) as unknown as Array<
       PayoutRecord & { rowid: number }
     >;
 
-    const payouts = rows.map(({ rowid: _rowid, ...rest }) => rest);
-    const nextCursor =
-      rows.length === filters.limit ? rows[rows.length - 1]?.rowid ?? null : null;
+    const hasMore = rows.length > filters.limit;
+    const pageRows = hasMore ? rows.slice(0, filters.limit) : rows;
+    const payouts = pageRows.map(({ rowid: _rowid, ...rest }) => rest);
+    const nextCursor = hasMore ? pageRows[pageRows.length - 1]?.rowid ?? null : null;
 
     return { payouts, nextCursor };
   }
