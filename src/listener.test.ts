@@ -101,3 +101,20 @@ test("startListener polls and handles injectable mock RPC server response", asyn
   assert.equal(state.running, false);
   store.close();
 });
+
+test("listener backoff and error tracking on poll failure", async () => {
+  const store = new Store(":memory:");
+  const state = { running: false, lastPoll: null, lastError: null, processed: 0 };
+  const failingServer = {
+    getLatestLedger: async () => {
+      throw new Error("RPC timeout error");
+    },
+  };
+
+  const stop = startListener(config, store, state, failingServer);
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(state.lastError, "RPC timeout error");
+  await stop();
+  assert.equal(state.running, false);
+  store.close();
+});
