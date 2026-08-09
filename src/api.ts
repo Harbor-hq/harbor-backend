@@ -45,6 +45,7 @@ export function createApp(
         processed: listener.processed,
       },
       index: {
+        contractId: config.contractId,
         lastLedger: health.lastLedger,
         payoutCount: health.payoutCount,
         backlog: health.backlog,
