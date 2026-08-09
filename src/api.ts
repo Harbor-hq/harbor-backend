@@ -30,12 +30,14 @@ export function createApp(
   });
 
   app.get("/health", (_req, res) => {
-    // The checkpoint holds the last on-chain ledger the listener indexed up
-    // to; use it to report a real backlog instead of a hardcoded 0.
-    const latest = store.getCheckpoint(config.contractId);
-    const health = store.health(latest ?? undefined);
-    res.json({
-      status: "ok",
+    const checkpoint = store.getCheckpoint(config.contractId);
+    const health = store.health(checkpoint ?? undefined);
+
+    const isHealthy = !listener.lastError;
+    const httpStatus = isHealthy ? 200 : 503;
+
+    res.status(httpStatus).json({
+      status: isHealthy ? "ok" : "degraded",
       contractId: config.contractId,
       rpcUrl: config.rpcUrl,
       listener: {
