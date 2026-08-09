@@ -142,9 +142,14 @@ export function parsePayoutEvent(
   const amount = data[0];
   const department = data[1] ? String(data[1]) : "";
 
-  if (!batchId || !payee || amount === undefined) return null;
+  if (!batchId || !payee || amount === undefined || amount === null) return null;
 
-  const amountBase = BigInt(amount).toString();
+  let amountBase: string;
+  try {
+    amountBase = BigInt(amount).toString();
+  } catch {
+    return null;
+  }
 
   return {
     txHash: event.txHash,
