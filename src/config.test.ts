@@ -1,4 +1,3 @@
-import { describe, it, expect } from "vitest"; // Wait, backend uses node:test!
 import assert from "node:assert";
 import test from "node:test";
 import { getConfig } from "./config.js";
@@ -23,4 +22,20 @@ test("getConfig throws on invalid CONTRACT_ID format", () => {
   assert.throws(() => {
     getConfig({ CONTRACT_ID: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" }); // starts with G
   }, /Invalid CONTRACT_ID format/);
+});
+
+test("getConfig validates RPC_URL format", () => {
+  assert.throws(() => {
+    getConfig({ RPC_URL: "not_a_url" });
+  }, /Invalid configuration: RPC_URL must be a valid URL/);
+});
+
+test("getConfig validates numeric environment variables", () => {
+  assert.throws(() => {
+    getConfig({ PORT: "not_a_number" });
+  }, /Invalid configuration: PORT must be a non-negative number/);
+
+  assert.throws(() => {
+    getConfig({ POLL_INTERVAL_MS: "-500" });
+  }, /Invalid configuration: POLL_INTERVAL_MS must be a non-negative number/);
 });
