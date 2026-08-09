@@ -20,9 +20,10 @@ export interface ListenerState {
 export function startListener(
   config: Config,
   store: Store,
-  state: ListenerState
+  state: ListenerState,
+  serverOverride?: any
 ): () => void {
-  const server = getServer(config);
+  const server = serverOverride ?? getServer(config);
   let inFlight: Promise<void> = Promise.resolve();
   let consecutiveFailures = 0;
   const MAX_BACKOFF_MS = 300_000;

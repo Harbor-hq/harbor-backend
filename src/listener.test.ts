@@ -1,11 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parsePayoutEvent } from "./listener.js";
+import { parsePayoutEvent, startListener } from "./listener.js";
+import { Store } from "./db.js";
 import type { PayoutEventRaw } from "./types.js";
 
 const config = {
   rpcUrl: "https://soroban-testnet.stellar.org",
-  contractId: "C...",
+  contractId: "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID",
   tokenSymbol: "USDC",
   tokenDecimals: 6,
   host: "0.0.0.0",
@@ -47,7 +48,6 @@ test("ignores non-payout events", () => {
 });
 
 test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
-  // Missing batchId
   const noBatch: PayoutEventRaw = {
     txHash: "a",
     logIndex: 0,
@@ -57,7 +57,6 @@ test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
   };
   assert.equal(parsePayoutEvent(noBatch, config), null);
 
-  // Missing payee
   const noPayee: PayoutEventRaw = {
     txHash: "a",
     logIndex: 0,
@@ -67,7 +66,6 @@ test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
   };
   assert.equal(parsePayoutEvent(noPayee, config), null);
 
-  // Missing amount in data
   const noAmount: PayoutEventRaw = {
     txHash: "a",
     logIndex: 0,
@@ -77,7 +75,6 @@ test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
   };
   assert.equal(parsePayoutEvent(noAmount, config), null);
 
-  // Missing department defaults to empty string
   const noDept: PayoutEventRaw = {
     txHash: "a",
     logIndex: 0,
@@ -89,4 +86,18 @@ test("parsePayoutEvent handles missing or invalid fields gracefully", () => {
   assert.ok(record);
   assert.equal(record.department, "");
   assert.equal(record.amountDisplay, "5");
+});
+
+test("startListener polls and handles injectable mock RPC server response", async () => {
+  const store = new Store(":memory:");
+  const state = { running: false, lastPoll: null, lastError: null, processed: 0 };
+  const mockServer = {
+    getLatestLedger: async () => ({ sequence: 10 }),
+  };
+
+  const stop = startListener(config, store, state, mockServer);
+  assert.equal(state.running, true);
+  await stop();
+  assert.equal(state.running, false);
+  store.close();
 });
