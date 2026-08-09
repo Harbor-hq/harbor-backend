@@ -40,6 +40,7 @@ test("toBaseUnits and fromBaseUnits handle zero properly", () => {
   assert.equal(toBaseUnits("0", 6).toString(), "0");
   assert.equal(toBaseUnits("0.0", 6).toString(), "0");
   assert.equal(toBaseUnits("-0", 6).toString(), "0");
+  assert.equal(toBaseUnits("-0.00", 6).toString(), "0");
   assert.equal(fromBaseUnits(0n, 6), "0");
 });
 
