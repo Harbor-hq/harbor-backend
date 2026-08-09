@@ -104,3 +104,10 @@ test("listPayouts paginates with nextCursor and stops at the end", () => {
   assert.equal(page3.nextCursor, null);
   store.close();
 });
+
+test("isMockContract identifies mock contract ID", () => {
+  const store = new Store(":memory:");
+  assert.equal(store.isMockContract("CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID"), true);
+  assert.equal(store.isMockContract("CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"), false);
+  store.close();
+});
