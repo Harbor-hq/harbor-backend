@@ -33,7 +33,7 @@ export function getConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const rpcUrl = env.RPC_URL ?? "https://soroban-testnet.stellar.org";
   validateUrl(rpcUrl, "RPC_URL");
 
-  const contractId = env.CONTRACT_ID ?? "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID";
+  const contractId = env.CONTRACT_ID ?? "CAZU4T3LWQGXBBBFZPCWWVDRT2PWOF3G6S44XVNDCHKM24KUDKQQ5L2E";
   
   // Validate CONTRACT_ID format
   if (contractId !== "CD4U2T3X5K7G2J6L4A8B9Z1Y0W_MOCK_CONTRACT_ID") {
